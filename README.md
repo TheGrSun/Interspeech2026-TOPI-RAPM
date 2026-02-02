@@ -14,13 +14,24 @@ R-APM is a retrieval-based system for cross-lingual prosody transfer from Englis
 
 ## Key Results
 
-| Model | Internal Split | Official Test | vs Baseline |
-|-------|----------------|---------------|-------------|
-| **1024-Fusion** (Submission) | **0.8742** | **0.8288** | **+0.10%** |
-| 1024-Pure | 0.8722 | - | - |
-| 103-Fusion | 0.8654 | - | - |
-| 103-Pure | 0.8642 | - | - |
-| **MLP Baseline** | 0.8732 | **0.8574** | - |
+### Internal Split (Official Train/Test Split)
+
+| Model | Score | vs MLP Baseline |
+|-------|-------|-----------------|
+| **1024-Fusion** (Submission) | **0.8742** | **+0.10%** |
+| 1024-Pure | 0.8722 | -0.11% |
+| 103-Fusion | 0.8654 | -0.90% |
+| 103-Pure | 0.8642 | -1.03% |
+| **MLP Baseline** | 0.8732 | - |
+
+### Official Test Set
+
+| Model | Score | vs MLP Baseline |
+|-------|-------|-----------------|
+| **1024-Fusion** (Submission) | **0.8288** | **-2.86%** |
+| **MLP Baseline** | **0.8574** | - |
+
+> **Note**: Internal split uses the official train/test filelists from `official_baseline/data/filelists/`. The MLP baseline outperforms our system on the official test set, indicating challenges in generalization to unseen speakers.
 
 ## Architecture
 
