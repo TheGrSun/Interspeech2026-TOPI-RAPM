@@ -1,0 +1,149 @@
+# ============================================================================
+# R-APM v2 Configuration
+# ============================================================================
+
+# Data Configuration
+data:
+  data_dir: "E:/interspeech2026/dral-features/features"
+  feature_dim_raw: 1024
+  feature_dim_selected: 101
+  split_ratio:
+    train: 0.8
+    val: 0.1
+    test: 0.1
+  seed: 42
+
+# Feature Selection
+feature_selection:
+  method: "variance"  # "variance" or "mutual_information"
+  n_components: 101
+  language: "spanish"
+  mi_method: "pairwise_correlation"  # For MI selection: "pairwise_correlation" or "target_correlation"
+
+# Model Architecture (v2)
+model:
+  # Pragmatic Space (for contrastive learning)
+  pragmatic_space:
+    dim: 96              # Smaller dimension to reduce overfitting (was 128)
+    dropout: 0.4         # More dropout for regularization (was 0.3)
+  
+  # Manifold Learning (for manifold retrieval)
+  manifold:
+    n_components: 96     # Balanced dimension (was 128, try Isomap instead)
+    method: "isomap"      # Try Isomap for better geodesic distance (was "lle")
+    n_neighbors: 15      # Balanced neighbors for Isomap (was 20)
+  
+  # Retrieval Module (1024-dim, optimal parameters)
+  retrieval:
+    top_k: 50            # Try even larger K for better coverage
+    temperature: 0.07     # Very sharp attention
+    dim: 1024
+    use_cross_attention: false  # Cross-attention caused overfitting
+    num_heads: 4
+    # Enhanced retrieval with OT-inspired similarity
+    use_enhanced: true           # Use enhanced retrieval with Wasserstein
+    similarity_type: "hybrid"    # Best so far (achieved 0.8855)
+  
+  # Cross-Lingual Alignment (NEW: Direct EN→ES mapping)
+  alignment:
+    enabled: false          # Disabled: Needs more tuning (was causing overfitting)
+    hidden_dims: [512, 256, 128]  # Alignment network architecture
+    dropout: 0.3
+    fusion_weight: 0.6      # Initial weight for retrieval (0.6) vs alignment (0.4)
+  
+  # Optimal Transport (NEW: Wasserstein distance-based mapping)
+  optimal_transport:
+    enabled: false          # Set to true when using train_rapm_ot.py
+    hidden_dims: [512, 256, 128]  # OT mapping network architecture
+    dropout: 0.3
+    use_sinkhorn: false     # Use Sinkhorn algorithm (slower but more accurate)
+    sinkhorn_lambda: 10.0   # Regularization for Sinkhorn
+  
+  # Correction Network (Optimized for enhanced retrieval)
+  correction:
+    enabled: true            # Enable for final optimization
+    type: "enhanced"         # 'standard', 'relative', or 'enhanced'
+    use_relative: false      # Use absolute correction (for 'relative' type)
+    hidden_dims: [384, 192]  # Slightly larger for more capacity
+    dropout: 0.1             # Very low dropout
+    delta_weight: 0.5       # Lower weight = more correction allowed
+    # Enhanced correction specific
+    use_attention: true      # Use self-attention
+    use_multiscale: true     # Use multi-scale MLP
+    num_heads: 8             # Number of attention heads
+
+  # Legacy (for v1 compatibility)
+  encoder:
+    input_dim: 101
+    hidden_dims: [128, 64, 64, 64]
+    output_dim: 64
+    dropout: 0.4
+  
+  fusion:
+    input_dim: 1189
+    hidden_dims: [256, 128, 64]
+    output_dim: 101
+    dropout: 0.4
+    residual_weight: 0.5
+  
+  gating:
+    input_dim: 1191
+    hidden_dims: [64, 32]
+    bias_init: 2.0
+
+# Training Configuration
+training:
+  epochs: 500            # Increased to 500 for better convergence
+  batch_size: 64         # Optimal: 64 works well
+  learning_rate: 0.0008  # Slightly lower LR for stability
+  weight_decay: 0.0005   # Lower weight decay for more capacity
+  num_workers: 4
+  device: "cuda"
+  early_stopping: 30
+  # Loss configuration: 'mse', 'cosine', or 'mixed'
+  loss_type: "cosine"  # Pure cosine loss (directly optimize metric)
+  loss_weights:
+    cosine: 1.0   # Pure cosine
+    mse: 0.0      # No MSE
+  contrastive_weight: 0.2  # Reduced weight for contrastive loss (was 0.5, may cause overfitting)
+  # Learning rate scheduling
+  use_scheduler: true
+  scheduler_type: "cosine"  # 'cosine' or 'step'
+  scheduler_params:
+    T_max: 500  # Match epochs for full cosine annealing
+    eta_min: 1.0e-6  # Lower minimum LR for fine-tuning
+
+# Loss Weights (for v1)
+loss_weights:
+  recon: 1.0
+  contrast: 0.5
+  align: 0.1
+  gate_reg: 500.0
+
+# Gate Regularization (for v1)
+gate_regularization:
+  type: "target_range"
+  target_min: 0.7
+  target_max: 0.95
+  penalty_weight: 1.0
+
+# Contrastive Loss
+contrastive:
+  temperature: 0.07
+
+# Optimizer
+optimizer:
+  type: "AdamW"
+  betas: [0.9, 0.999]
+  eps: 1.0e-8
+
+# Checkpointing
+checkpoint:
+  dir: "E:/interspeech2026/checkpoints"
+  save_best: true
+  save_frequency: 10
+
+# Logging
+logging:
+  log_frequency: 10
+  verbose: true

@@ -1,0 +1,10 @@
+# Model Checkpoints
+*.pth filter=lfs diff=lfs merge=lfs -text
+*.pt filter=lfs diff=lfs merge=lfs -text
+checkpoints/** filter=lfs diff=lfs merge=lfs -text
+
+# Large Data Files
+*.npy filter=lfs diff=lfs merge=lfs -text
+
+# Audio Files
+*.wav filter=lfs diff=lfs merge=lfs -text
