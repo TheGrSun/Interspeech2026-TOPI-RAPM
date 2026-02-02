@@ -41,9 +41,12 @@ training:
 
 ```yaml
 feature_selection:
-  method: "variance"       # Variance-based selection
-  n_components: 101        # Official competition format
+  method: "official"       # Predefined official indices from baseline
+  n_components: 101        # Spanish winners from official feature selection
+  source: "official_baseline/feature_selection.py"
 ```
+
+**Note**: The feature selection uses 101 predefined indices from the official competition baseline (`spanish_winners` in `official_baseline/feature_selection.py`). These indices were selected using a greedy algorithm to find features most useful for detecting pragmatic similarity.
 
 ## Usage
 
