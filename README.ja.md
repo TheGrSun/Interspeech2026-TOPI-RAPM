@@ -141,7 +141,7 @@ DRAL データセットは以下からダウンロードしてください: http
 ```bibtex
 @inproceedings{rapm2026,
   title={検索強型プラグマティックマッパーによる言語間プロディ転送},
-  author={Xiaoyang Luo and others},
+  author={Xiaoyang Luo, et al.},
   booktitle={Interspeech 2026},
   year={2026}
 }
