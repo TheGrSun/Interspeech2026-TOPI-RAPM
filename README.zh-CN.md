@@ -141,7 +141,7 @@ python generate_submission.py
 ```bibtex
 @inproceedings{rapm2026,
   title={检索增强的韵律映射器用于跨语言韵律迁移},
-  author={您的名字},
+  author={罗晓阳等},
   booktitle={Interspeech 2026},
   year={2026}
 }

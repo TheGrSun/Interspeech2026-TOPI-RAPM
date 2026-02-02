@@ -141,7 +141,7 @@ Download the DRAL dataset from: https://www.cs.utep.edu/nigel/dral/
 ```bibtex
 @inproceedings{rapm2026,
   title={Retrieval-Augmented Pragmatic Mapper for Cross-Lingual Prosody Transfer},
-  author={Your Name},
+  author={Xiaoyang Luo and others},
   booktitle={Interspeech 2026},
   year={2026}
 }
