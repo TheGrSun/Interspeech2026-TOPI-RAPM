@@ -1,189 +1,111 @@
-# Retrieval-Augmented Pragmatic Mapper
+# R-APM: Retrieval-Augmented Pragmatic Mapper
 
-PyTorch implementation for cross-lingual prosody transfer using retrieval-augmented learning.
+PyTorch implementation for cross-lingual prosody transfer using retrieval-augmented learning. This is the official implementation for Interspeech 2026 TOPI Challenge.
 
-## 项目结构
+## Paper
+
+**R-APM: Retrieval-Augmented Pragmatic Mapper for Cross-Lingual Prosody Transfer**
+Xiaoyang Luo, Siyuan Jiang, Shuya Yang, Dengfeng Ke, Yanlu Xie, Jinsong Zhang
+Interspeech 2026
+
+> See: [InterspeechPaperRAPM.tex.pdf](../InterspeechPaperRAPM.tex.pdf)
+
+## Project Structure
 
 ```
 src/
 ├── models/
-│   ├── encoder.py       # 语用编码器 (101→64)
-│   ├── retrieval.py     # 检索模块 (top-k=5)
-│   ├── fusion.py        # 融合网络 (266→101)
-│   ├── gating.py        # 门控机制 (167→1)
-│   └── mapper.py        # 完整模型组装
+│   ├── retrieval.py     # Retrieval Module (Top-K kNN)
+│   └── fusion.py        # Fusion Network (MLP)
 ├── data/
-│   ├── pca_reducer.py   # PCA降维器 (1024→101)
-│   └── dataset.py       # 数据集加载器
-├── losses/
-│   └── losses.py        # 损失函数
-├── config.py            # 超参数配置
-├── train.py             # 训练脚本
-├── evaluate.py          # 评估脚本
-└── README.md            # 本文件
+│   └── dataset.py       # Dataset loader
+├── train_rapm_v2.py     # Main training script
+└── README.md            # This file
 ```
 
-## 关键维度说明
+## System Architecture
 
-经过分析官方数据和baseline，确认的维度流程：
+### Config A: High-Res (1024-dim)
+```
+EN_1024 -> Retrieval(1024-dim) -> ES_retrieved_1024 -> Selection -> ES_101
+```
 
-| 阶段 | 维度 | 说明 |
-|------|------|------|
-| 原始HuBERT特征 | 1024 | 从dral-features下载的原始数据 |
-| PCA降维 | **101** | 使用PCA保留85%方差，**这是提交格式** |
-| 语用编码器输出 | 64 | 跨语言语用表示空间 |
-| 模型输出 | **101** | 预测的西班牙语特征（可直接提交）|
+### Config B: Pragmatic-Subspace (103-dim) **[Submission Model]**
+```
+EN_1024 -> Projection(103-dim) -> Retrieval -> ES_retrieved_1024 -> Selection -> ES_101
+                                                               |
+                                    Fusion Network: [1125 -> 256 -> 128 -> 101]
+                                                               |
+                                              ES_pred = ES_retrieved + Delta
+```
 
-## 快速开始
+### Key Dimensions
 
-### 1. 安装依赖
+| Stage | Dimension | Description |
+|-------|-----------|-------------|
+| Input (EN HuBERT) | 1024 | English features |
+| Query Projection (Config B) | 103 | Using `english_winners` indices |
+| Retrieved Value | 1024 | Full Spanish features |
+| Output (ES) | 101 | Using `spanish_winners` indices |
+| Fusion Input | 1125 | Concat[EN_1024, ES_retrieved_101] |
+
+### Core Parameters
+
+- **Retrieval**: Top-K=70, Temperature=0.04, Cosine Similarity
+- **Fusion Network**: MLP [1125 -> 256 -> 128 -> 101], GELU activation, LayerNorm
+- **Training**: 100 epochs, AdamW (lr=1e-3), Cosine Embedding Loss
+
+## Key Results
+
+| Config | Internal (Seen) | Official (Unseen) |
+|--------|-----------------|-------------------|
+| **Config A (1024-dim)** | | |
+| Pure Retrieval | 0.8722 | 0.8286 |
+| Ret + Fusion | 0.8742 | 0.8290 |
+| **Config B (103-dim)** | | |
+| Pure Retrieval | 0.8730 | 0.8318 |
+| Ret + Fusion | 0.8741 | **0.8331** |
+
+## Installation
 
 ```bash
 pip install torch torchvision torchaudio
-pip install numpy scikit-learn tqdm
+pip install numpy scikit-learn tqdm pyyaml
 ```
 
-### 2. 准备PCA降维模型
+## Usage
 
-PCA模型已自动生成在 `../checkpoints/pca_reducer_101.pkl`
-
-如需重新生成：
-
+### Training
 ```bash
-cd data
-python pca_reducer.py
+python train_rapm_v2.py
 ```
 
-### 3. 训练模型（三阶段）
-
+### Evaluation
 ```bash
-python train.py
+python evaluate.py --checkpoint ../checkpoints/best_model.pth
 ```
 
-训练分为三个阶段：
-- **Stage 1 (Epochs 1-30)**: 语用空间预训练，仅对比学习
-- **Stage 2 (Epochs 31-150)**: 联合训练，所有损失
-- **Stage 3 (Epochs 151-200)**: 精调，降低学习率
+## Key Findings
 
-### 4. 评估和生成提交文件
+1. **Identity Overfitting**: 1024-dim retrieval suffers from timbre interference on unseen speakers
+2. **Subspace Advantage**: 103-dim retrieval improves generalization (+0.0032)
+3. **Small Data Trap**: Fusion networks struggle when data density is low (N < 3k)
+4. **PCA Failure**: Variance-based reduction destroys pragmatic structure (0.4456 vs 0.8741)
 
-```bash
-python evaluate.py
-```
+## Citation
 
-生成的预测文件位于 `../submissions/predictions/`，格式为 `ES_xxx_x.npy` (101维)
-
-## 模型架构
-
-### 数据流
-
-```
-EN特征(101) 
-    ↓
-语用编码器 → 语用表示(64)
-    ↓
-检索模块 → 检索SP特征(101) + 置信度 + 熵
-    ↓
-融合网络 ← [EN特征, 检索SP, 语用表示]
-    ↓
-生成SP特征(101)
-    ↓
-门控机制 → 权重g ∈ [0,1]
-    ↓
-最终输出 = g·检索 + (1-g)·生成
-```
-
-### 核心参数
-
-- **编码器**: 101→256→128→64, L2归一化
-- **检索**: top-k=5, temperature=0.1
-- **融合**: 266→512→256→101, 带残差旁路
-- **门控**: 167→64→32→1, Sigmoid输出
-
-## 损失函数
-
-| 损失项 | 权重 | 说明 |
-|--------|------|------|
-| 重建损失 | 1.0 | MSE(pred, target) |
-| 对比损失 | 0.5 | InfoNCE，语用空间对齐 |
-| 分布对齐 | 0.1 | 均值+方差对齐 |
-| 门控正则 | 0.05 | 熵正则，防止退化 |
-| L2正则 | 0.01 | 参数正则化 |
-
-## 训练配置
-
-### Stage 1 (对比学习预训练)
-- Learning Rate: 1e-3
-- Batch Size: 64
-- Epochs: 30
-- 只训练编码器，冻结融合和门控
-
-### Stage 2 (联合训练)
-- Learning Rate: 1e-3 (encoder), 5e-4 (others)
-- Batch Size: 64
-- Epochs: 120
-- 全部模块激活，使用所有损失
-
-### Stage 3 (微调)
-- Learning Rate: 1e-4
-- Batch Size: 64
-- Epochs: 50
-- 降低学习率精调
-
-## 数据增强
-
-训练时应用以下增强（概率性）：
-- 高斯噪声 (σ=0.05, p=0.3)
-- 特征Dropout (p_drop=0.1, p=0.2)
-- 特征缩放 (scale∈[0.9,1.1], p=0.2)
-- 特征偏移 (shift∈[-0.1,0.1], p=0.1)
-
-## 评估指标
-
-- **MSE**: Mean Squared Error (主要指标)
-- **Euclidean Distance**: 欧氏距离 (官方评估指标)
-
-## Checkpoint
-
-模型checkpoint保存在 `../checkpoints/`:
-- `pca_reducer_101.pkl`: PCA降维模型
-- `stage1_epoch_X.pth`: Stage 1 checkpoint
-- `stage2_epoch_X.pth`: Stage 2 checkpoint
-- `best_epoch_X.pth`: 验证集最佳模型
-
-## 提交格式
-
-生成的文件满足CodaBench要求：
-- 每个EN输入对应一个ES输出
-- 文件名: `ES_xxx_x.npy`
-- 维度: (101,) numpy array
-- 需要压缩成zip后提交
-
-## 理论依据
-
-详见项目根目录的 `theory.md` 和 `plan.md`：
-- 检索增强学习的理论基础
-- 语用表示空间的构建
-- 门控机制的动态权衡
-- 三阶段课程学习策略
-
-## 引用
-
-基于 DRAL 数据集：
-```
-@inproceedings{avila23_interspeech,
-  author={Jonathan E. Avila and Nigel G. Ward},
-  title={{Towards Cross-Language Prosody Transfer for Dialog}},
-  year=2023,
-  booktitle={Proc. INTERSPEECH 2023},
-  pages={2143--2147}
+```bibtex
+@inproceedings{luo2026rapm,
+  title={{R-APM: Retrieval-Augmented Pragmatic Mapper for Cross-Lingual Prosody Transfer}},
+  author={Luo, Xiaoyang and Jiang, Siyuan and Yang, Shuya and Ke, Dengfeng and Xie, Yanlu and Zhang, Jinsong},
+  booktitle={Interspeech 2026},
+  year={2026},
+  note={TOPI Challenge System Description}
 }
 ```
 
-## 参考资源
+## References
 
 - [DRAL Dataset](https://www.cs.utep.edu/nigel/dral/)
-- [GitHub: DRAL](https://github.com/joneavila/DRAL)
 - [Challenge Page](https://www.codabench.org/competitions/12225/)
 - [Baseline Code](https://github.com/mdekorte/Pragmatic_Similarity_Computation)
-

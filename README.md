@@ -6,32 +6,34 @@
 
 ---
 
+## Authors
+
+**Xiaoyang Luo**, **Siyuan Jiang**, **Shuya Yang**, **Dengfeng Ke**, **Yanlu Xie**, **Jinsong Zhang**
+
+Speech Acquisition and Intelligent Technology Laboratory (SAIT LAB)
+Beijing Language and Culture University, Beijing, China
+
+---
+
 ## Overview
 
 R-APM is a retrieval-based system for cross-lingual prosody transfer from English to Spanish. It predicts Spanish HuBERT prosodic features (101-dim) from English HuBERT features (1024-dim) using a hybrid retrieval + fusion architecture.
 
-> **📄 System Description**: [R-APM: Retrieval-Augmented Pragmatic Mapper for Cross-Lingual Prosody Transfer.PDF](docs/R-APM_System_Description.pdf) (Coming Soon)
+> **📄 Paper**: [InterspeechPaperRAPM.tex.pdf](InterspeechPaperRAPM.tex.pdf) - Interspeech 2026 TOPI Challenge System Description
 
 ## Key Results
 
-### Internal Split (Official Train/Test Split)
+| System | Ret. Dim | Internal (Seen) Cosine | Gain | Official (Unseen) Cosine | Gain |
+|--------|----------|------------------------|------|--------------------------|------|
+| **Baseline MLP** | - | 0.8732 | - | **0.8574** | - |
+| **Config A: High-Res** | | | | | |
+| ─ Pure Ret | 1024 | 0.8722 | - | 0.8286 | - |
+| ─ Ret + Fusion | 1024 | **0.8742** | +0.0020 | 0.8290 | +0.0004 |
+| **Config B: Subspace** | | | | | |
+| ─ Pure Ret | 103 | 0.8730 | - | 0.8318 | - |
+| ─ Ret + Fusion | 103 | 0.8741 | +0.0011 | **0.8331** | +0.0013 |
 
-| Model | Score | vs MLP Baseline |
-|-------|-------|-----------------|
-| **1024-Fusion** (Submission) | **0.8742** | **+0.10%** |
-| 1024-Pure | 0.8722 | -0.11% |
-| 103-Fusion | 0.8654 | -0.90% |
-| 103-Pure | 0.8642 | -1.03% |
-| **MLP Baseline** | 0.8732 | - |
-
-### Official Test Set
-
-| Model | Score | vs MLP Baseline |
-|-------|-------|-----------------|
-| **1024-Fusion** (Submission) | **0.8288** | **-2.86%** |
-| **MLP Baseline** | **0.8574** | - |
-
-> **Note**: Internal split uses the official train/test filelists from `official_baseline/data/filelists/`. The MLP baseline outperforms our system on the official test set, indicating challenges in generalization to unseen speakers.
+> **Note**: Internal split uses the official train/test filelists. Config B (103-dim subspace) achieves best performance on official test set with unseen speakers.
 
 ## Architecture
 
@@ -68,41 +70,38 @@ R-APM is a retrieval-based system for cross-lingual prosody transfer from Englis
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Fusion Mode ⭐ **SUBMISSION MODEL**
+### Fusion Mode ⭐ **SUBMISSION MODEL (Config B)**
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           FUSION MODE (Submission)                          │
+│                           FUSION MODE (Config B)                            │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │   Input: EN_1024 (English HuBERT Features, 1024-dim)                        │
 │       │                                                                     │
-│       ├────────────────────────────────────────┐                            │
-│       ▼                                        ▼                            │
-│   ┌─────────────────────┐         ┌─────────────────────────┐             │
-│   │ Enhanced Retrieval  │         │   Direct Projection      │             │
-│   │ • Top-K=70          │         │   EN_1024 → 101         │             │
-│   │ • Temp=0.04         │         └─────────────────────────┘             │
-│   └─────────────────────┘                    │                             │
-│       │                                      │                             │
-│       ▼                                      │                             │
-│   ES_retrieved_1024                          │                             │
-│       │                                      │                             │
-│       ▼                                      │                             │
-│   Feature Selection (101-dim)                 │                             │
-│       │                                      │                             │
-│       ▼                                      ▼                             │
-│   ┌─────────────────────────────────────────────────────┐                  │
-│   │              FUSION NETWORK                          │                  │
-│   │  ┌─────────────────────────────────────────────┐    │                  │
-│   │  │  • Multi-head Self-Attention (8 heads)      │    │                  │
-│   │  │  • Multi-scale MLP: [256, 128, 64]          │    │                  │
-│   │  │  • Gating Mechanism (Attention-based)       │    │                  │
-│   │  │  • Layer Normalization + Dropout(0.0)       │    │                  │
-│   │  └─────────────────────────────────────────────┘    │                  │
-│   │                                                     │                  │
-│   │  Output = ES_retrieved + Delta(EN_input)           │                  │
-│   └─────────────────────────────────────────────────────┘                  │
+│       ▼                                                                     │
+│   ┌─────────────────────────────────────────────────────────────┐          │
+│   │         Enhanced Retrieval Module                           │          │
+│   │  • Query Projection: 1024 → 103 (english_winners)          │          │
+│   │  • Top-K Retrieval: K=70                                    │          │
+│   │  • Temperature: 0.04 (Sharp Attention)                      │          │
+│   │  • Similarity: Cosine                                       │          │
+│   └─────────────────────────────────────────────────────────────┘          │
+│       │                                                                     │
+│       ▼                                                                     │
+│   ES_retrieved_1024 (Retrieved Spanish Features, 1024-dim)                  │
+│       │                                                                     │
+│       ▼                                                                     │
+│   Feature Selection (101-dim via spanish_winners)                            │
+│       │                                                                     │
+│       ▼                                                                     │
+│   ┌─────────────────────────────────────────────────────────────┐          │
+│   │              FUSION NETWORK (MLP)                           │          │
+│   │  • Input: Concat[EN_1024, ES_retrieved_101] = 1125-dim      │          │
+│   │  • Architecture: [1125 → 256 → 128 → 101]                   │          │
+│   │  • Activation: GELU + LayerNorm                             │          │
+│   │  • Output: ES_pred = ES_retrieved + Delta                   │          │
+│   └─────────────────────────────────────────────────────────────┘          │
 │       │                                                                     │
 │       ▼                                                                     │
 │   Output: ES_101_fused (Spanish Prosodic Features, 101-dim)                 │
@@ -139,11 +138,12 @@ Download the DRAL dataset from: https://www.cs.utep.edu/nigel/dral/
 ## Citation
 
 ```bibtex
-@inproceedings{rapm2026,
-  title={Retrieval-Augmented Pragmatic Mapper for Cross-Lingual Prosody Transfer},
-  author={Xiaoyang Luo, et al.},
+@inproceedings{luo2026rapm,
+  title={{R-APM: Retrieval-Augmented Pragmatic Mapper for Cross-Lingual Prosody Transfer}},
+  author={Luo, Xiaoyang and Jiang, Siyuan and Yang, Shuya and Ke, Dengfeng and Xie, Yanlu and Zhang, Jinsong},
   booktitle={Interspeech 2026},
-  year={2026}
+  year={2026},
+  note={TOPI Challenge System Description}
 }
 ```
 
