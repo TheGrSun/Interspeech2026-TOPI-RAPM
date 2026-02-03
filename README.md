@@ -37,77 +37,17 @@ R-APM is a retrieval-based system for cross-lingual prosody transfer from Englis
 
 ## Architecture
 
-### Pure Retrieval Mode
+### System Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              PURE RETRIEVAL MODE                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   Input: EN_1024 (English HuBERT Features, 1024-dim)                        │
-│       │                                                                     │
-│       ▼                                                                     │
-│   ┌─────────────────────────────────────────────────────────────┐          │
-│   │         Enhanced Retrieval Module                           │          │
-│   │  • Similarity: Cosine                                       │          │
-│   │  • Top-K Retrieval: K=70                                    │          │
-│   │  • Temperature: 0.04 (Sharp Attention)                      │          │
-│   └─────────────────────────────────────────────────────────────┘          │
-│       │                                                                     │
-│       ▼                                                                     │
-│   ES_retrieved_1024 (Retrieved Spanish Features, 1024-dim)                  │
-│       │                                                                     │
-│       ▼                                                                     │
-│   ┌─────────────────────────────────────────────────────────────┐          │
-│   │         Feature Selection Module                            │          │
-│   │  • Method: Predefined Official Indices (101 dims)           │          │
-│   │  • Source: Competition baseline feature selection          │          │
-│   └─────────────────────────────────────────────────────────────┘          │
-│       │                                                                     │
-│       ▼                                                                     │
-│   Output: ES_101 (Spanish Prosodic Features, 101-dim)                       │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+**Figure 1: R-APM System Architecture**
 
-### Fusion Mode ⭐ **SUBMISSION MODEL (Config B)**
+![R-APM Architecture](docs/images/figure1_architecture.png)
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           FUSION MODE (Config B)                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   Input: EN_1024 (English HuBERT Features, 1024-dim)                        │
-│       │                                                                     │
-│       ▼                                                                     │
-│   ┌─────────────────────────────────────────────────────────────┐          │
-│   │         Enhanced Retrieval Module                           │          │
-│   │  • Query Projection: 1024 → 103 (english_winners)          │          │
-│   │  • Top-K Retrieval: K=70                                    │          │
-│   │  • Temperature: 0.04 (Sharp Attention)                      │          │
-│   │  • Similarity: Cosine                                       │          │
-│   └─────────────────────────────────────────────────────────────┘          │
-│       │                                                                     │
-│       ▼                                                                     │
-│   ES_retrieved_1024 (Retrieved Spanish Features, 1024-dim)                  │
-│       │                                                                     │
-│       ▼                                                                     │
-│   Feature Selection (101-dim via spanish_winners)                            │
-│       │                                                                     │
-│       ▼                                                                     │
-│   ┌─────────────────────────────────────────────────────────────┐          │
-│   │              FUSION NETWORK (MLP)                           │          │
-│   │  • Input: Concat[EN_1024, ES_retrieved_101] = 1125-dim      │          │
-│   │  • Architecture: [1125 → 256 → 128 → 101]                   │          │
-│   │  • Activation: GELU + LayerNorm                             │          │
-│   │  • Output: ES_pred = ES_retrieved + Delta                   │          │
-│   └─────────────────────────────────────────────────────────────┘          │
-│       │                                                                     │
-│       ▼                                                                     │
-│   Output: ES_101_fused (Spanish Prosodic Features, 101-dim)                 │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+### Fusion Network Design
+
+**Figure 2: Fusion Network with Residual Connection**
+
+![Fusion Network](docs/images/figure2_fusion.png)
 
 ## Installation
 
