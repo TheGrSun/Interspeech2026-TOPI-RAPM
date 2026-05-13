@@ -1,6 +1,6 @@
-# Interspeech 2026 TOPI S2ST Challenge: R-APM
+# Interspeech 2026 TOPI S2ST Challenge: RAPM
 
-**Retrieval-Augmented Pragmatic Mapper for Cross-Lingual Prosody Transfer**
+**Retrieval Augmented Pragmatic Mapper for Cross-Lingual Prosody Transfer**
 
 [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
