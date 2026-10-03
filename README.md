@@ -1,97 +1,115 @@
 # Interspeech 2026 TOPI S2ST Challenge: RAPM
 
-**Retrieval Augmented Pragmatic Mapper for Cross-Lingual Prosody Transfer**
+**RAPM: Retrieval-Augmented Pragmatic Mapper for Speech-to-Speech Translation**
 
 [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
----
-
 ## Authors
 
-**Xiaoyang Luo**, **Siyuan Jiang**, **Shuya Yang**, **Dengfeng Ke**, **Yanlu Xie**, **Jinsong Zhang**
+**Xiaoyang Luo**, **Siyuan Jiang**, **Shuya Yang**, **Dengfeng Ke**, **Yanlu Xie**, **Jinsong Zhang** (corresponding author)
 
 Speech Acquisition and Intelligent Technology Laboratory (SAIT LAB)
+
 Beijing Language and Culture University, Beijing, China
 
----
+## Paper and overview
 
-## Overview
+[Read the latest paper PDF](InterspeechPaperRAPM.tex.pdf). This version displays the authors and affiliation and fixes the Translatotron 2 citation.
 
-R-APM is a retrieval-based system for cross-lingual prosody transfer from English to Spanish. It predicts Spanish HuBERT prosodic features (101-dim) from English HuBERT features (1024-dim) using a hybrid retrieval + fusion architecture.
+RAPM transfers pragmatic intent and prosody from English to Spanish. It takes 1024-dimensional English HuBERT features, retrieves aligned Spanish exemplars, and predicts the 101-dimensional pragmatic feature subset selected by `spanish_winners`. We compare pure retrieval with retrieval plus a learned residual fusion network.
 
-> **📄 Paper**: [InterspeechPaperRAPM.tex.pdf](InterspeechPaperRAPM.tex.pdf) - Interspeech 2026 TOPI Challenge System Description
+Config A searches the full 1024-dimensional English space. Config B searches the 103-dimensional `english_winners` subspace. Both retrieve full Spanish features before selecting the 101 output dimensions. Fusion combines the original 1024-dimensional English input and the 101-dimensional retrieved prior: `1125 → 256 → 128 → 101`, with LayerNorm and GELU. The final prediction is the retrieved prior plus the learned correction.
 
-## Key Results
+## Main results
 
-| System | Ret. Dim | Internal (Seen) Cosine | Gain | Official (Unseen) Cosine | Gain |
-|--------|----------|------------------------|------|--------------------------|------|
-| **Baseline MLP** | - | 0.8732 | - | **0.8574** | - |
-| **Config A: High-Res** | | | | | |
-| ─ Pure Ret | 1024 | 0.8722 | - | 0.8286 | - |
-| ─ Ret + Fusion | 1024 | **0.8742** | +0.0020 | 0.8290 | +0.0004 |
-| **Config B: Subspace** | | | | | |
-| ─ Pure Ret | 103 | 0.8730 | - | 0.8318 | - |
-| ─ Ret + Fusion | 103 | 0.8741 | +0.0011 | **0.8331** | +0.0013 |
+The following values are reported in the paper: means over 10 runs, with standard deviations of ±0.002. Gain is the absolute improvement from adding fusion.
 
-> **Note**: Internal split uses the official train/test filelists. Config B (103-dim subspace) achieves best performance on official test set with unseen speakers.
+| System | Retrieval dimensions | Internal: seen speakers | Fusion gain | Official: unseen speakers | Fusion gain |
+|---|---:|---:|---:|---:|---:|
+| Baseline MLP | — | 0.8732 | — | **0.8574** | — |
+| Config A: pure retrieval | 1024 | 0.8722 | — | 0.8286 | — |
+| Config A: retrieval + fusion | 1024 | **0.8742** | +0.0020 | 0.8290 | +0.0004 |
+| Config B: pure retrieval | 103 | 0.8730 | — | 0.8318 | — |
+| Config B: retrieval + fusion | 103 | 0.8741 | +0.0011 | **0.8331** | +0.0013 |
+
+Config B achieves the best RAPM result on the official challenge set, but remains below the MLP baseline by 0.0243. Four of the five official test speakers are absent from training. The internal split shares speakers with training; these evaluation settings must be kept separate.
+
+### Fusion input ablation
+
+The updated paper reports these results on the **internal split with seen speakers**, not the official blind test set.
+
+| Fusion input | Input dimensions | Cosine similarity |
+|---|---:|---:|
+| Original fusion: English context + retrieved prior | 1125 | **0.8741** |
+| Pure retrieval baseline | — | 0.8730 |
+| Prior-only refinement | 101 | 0.8683 |
+| Consistent subspace fusion | 204 | 0.8660 |
+
+Restricting source context reduces performance on seen speakers in this study. These scores do not establish an improvement on unseen speakers. Check individual experiment scripts and their data splits before using their output to reproduce the paper tables.
 
 ## Architecture
 
-### System Architecture
+![RAPM system architecture](docs/images/figure1_architecture.png)
 
-**Figure 1: R-APM System Architecture**
+![Residual fusion network](docs/images/figure2_fusion.png)
 
-![R-APM Architecture](docs/images/figure1_architecture.png)
+The paper uses cosine retrieval with `K=70` and temperature `0.04`. It reports fusion training for up to 100 epochs with AdamW, learning rate `1e-3`, weight decay `1e-4`, batch size 32, and cosine embedding loss. See the PDF for validation, early stopping, and evaluation details; individual repository scripts may use different training procedures.
 
-### Fusion Network Design
-
-**Figure 2: Fusion Network with Residual Connection**
-
-![Fusion Network](docs/images/figure2_fusion.png)
-
-## Installation
+## Installation and data
 
 ```bash
-git clone --recurse-submodules https://github.com/TheGrSun/Interspeech2026-TOPI-RAPM.git
+git clone https://github.com/TheGrSun/Interspeech2026-TOPI-RAPM.git
 cd Interspeech2026-TOPI-RAPM
 pip install -r requirements.txt
+git clone https://github.com/mdekorte/Pragmatic_Similarity_Computation.git official_mdekorte
 ```
 
-## Usage
+The baseline repository supplies `feature_selection.py` and the official file lists required by the experiment scripts. It is an external dependency, not a configured Git submodule. Obtain the [DRAL dataset](https://www.cs.utep.edu/nigel/dral/) and prepare aligned `EN_*.npy` / `ES_*.npy` features under `dral-features/features/`, with matching filename order. Dataset features and trained `.pth` weights are not included in the current Git tree.
+
+## Running the code
+
+From the repository root, after preparing the data and baseline dependency:
 
 ```bash
-# Training
-python src/train.py --config config/default.yaml
-
-# Evaluation
-python src/evaluate.py --checkpoint checkpoints/best_model.pth
-
-# Generate submission
-cd submit
-python generate_submission.py
+python src/train_ensemble.py --mode 103_fusion --data_dir dral-features/features --checkpoint_dir checkpoints --top_k 70 --temperature 0.04 --hidden_dims 256 128 --epochs 100 --lr 0.001 --batch_size 32 --device cuda
 ```
 
-## Dataset
+Use `--device cpu` for CPU execution. Other modes are `1024_fusion`, `1024_pure`, `103_pure`, and `all`. This script trains on the supplied feature directory and reports training cosine similarity; its score is not a held-out evaluation.
 
-Download the DRAL dataset from: https://www.cs.utep.edu/nigel/dral/
+For the comparison using the baseline repository's train/test file lists:
+
+```bash
+python src/compare_all_models_official_split.py
+```
+
+Check the script's feature paths and file lists before running it. The baseline file-list test split is the internal evaluation split, distinct from the official challenge's blind test set. The current Git tree has no standalone `src/evaluate.py` or submission-generation script.
+
+## Repository layout
+
+| Path | Contents |
+|---|---|
+| `InterspeechPaperRAPM.tex.pdf` | Latest paper with authors and affiliation |
+| `src/` | Training, comparison, and ablation scripts |
+| `experiments/` | Additional experiment scripts |
+| `scripts/` | Ensemble training and hyperparameter search |
+| `config/` | Configuration examples; check paths and script compatibility |
+| `checkpoints/` | Checkpoint documentation; weights are not tracked |
+| `docs/images/` | Architecture figures |
 
 ## Citation
 
+Bibliographic entry for this system-description manuscript:
+
 ```bibtex
-@inproceedings{luo2026rapm,
-  title={{R-APM: Retrieval-Augmented Pragmatic Mapper for Cross-Lingual Prosody Transfer}},
+@misc{luo2026rapm,
+  title={{RAPM: Retrieval-Augmented Pragmatic Mapper for Speech-to-Speech Translation}},
   author={Luo, Xiaoyang and Jiang, Siyuan and Yang, Shuya and Ke, Dengfeng and Xie, Yanlu and Zhang, Jinsong},
-  booktitle={Interspeech 2026},
   year={2026},
-  note={TOPI Challenge System Description}
+  howpublished={Interspeech 2026 TOPI Challenge system-description manuscript},
+  url={https://github.com/TheGrSun/Interspeech2026-TOPI-RAPM}
 }
 ```
 
-## License
+## License and acknowledgments
 
-MIT License
-
-## Acknowledgments
-
-- Interspeech 2026 TOPI S2ST Challenge organizers
-- DRAL Dataset creators
+[MIT License](LICENSE). We thank the Interspeech 2026 TOPI S2ST Challenge organizers, the DRAL dataset creators, and the baseline implementation authors.
